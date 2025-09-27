@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
   const code = url.searchParams.get("code");
   const next = url.searchParams.get("next") || "/settings/integrations";
   const supabase = createRouteHandlerClient({ cookies });
-  if (code) { await supabase.auth.exchangeCodeForSession(code); }
+  if (code) {
+    await supabase.auth.exchangeCodeForSession(code);
+  }
   return NextResponse.redirect(new URL(next, url.origin));
 }

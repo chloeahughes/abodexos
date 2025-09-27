@@ -1,4 +1,3 @@
-// middleware.ts
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
@@ -6,20 +5,19 @@ import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
   const supabase = createMiddlewareClient({ req, res });
-  const { data: { user } } = await supabase.auth.getUser();
+  // Refresh session cookie if there is one
+  await supabase.auth.getSession();
 
   const url = new URL(req.url);
-  const needsAuth = url.pathname.startsWith("/settings");
+  const isAuthCallback = url.pathname === "/auth/callback";
+  const isStatic =
+    url.pathname.startsWith("/_next") ||
+    url.pathname.startsWith("/favicon.ico") ||
+    url.pathname.startsWith("/robots.txt") ||
+    url.pathname.startsWith("/sitemap.xml");
 
-  if (needsAuth && !user) {
-    url.pathname = "/login";
-   // preserve target so we can return after login
-    url.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
-    return NextResponse.redirect(url);
-  }
+  if (isAuthCallback || isStatic) return res;
   return res;
 }
 
-export const config = { 
-  matcher: ["/settings/:path*", "/deals/:path*"] 
-};
+export const config = { matcher: ["/settings/:path*", "/deals/:path*"] };
