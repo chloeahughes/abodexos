@@ -2,11 +2,14 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { hasGmailConnection } from "@/lib/gmailConnection";
+import { GmailControls } from "@/components/GmailControls";
+
+export const dynamic = "force-dynamic";
 
 export default async function DealPage({ params }: { params: { id: string } }) {
   const supabase = createServerComponentClient({ cookies });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return <div className="p-6">Please sign in. <a className="underline" href="/login">Go to login</a></div>;
+  if (!user) return <div className="p-6">Please sign in. <a className="underline" href={`/login?next=/deals/${params.id}`}>Go to login</a></div>;
 
   const connected = await hasGmailConnection(user.id);
 
@@ -23,13 +26,7 @@ export default async function DealPage({ params }: { params: { id: string } }) {
     <div className="max-w-5xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Deal</h1>
-        {!connected ? (
-          <a href="/api/email/google/init" className="rounded-lg bg-black px-4 py-2 text-white">Connect Gmail</a>
-        ) : (
-          <form action="/api/email/gmail/sync" method="post">
-            <button className="rounded-lg border px-4 py-2" formAction="/api/email/gmail/sync">Sync now</button>
-          </form>
-        )}
+        <GmailControls connected={connected} />
       </div>
 
       <div>

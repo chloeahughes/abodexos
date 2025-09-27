@@ -20,6 +20,6 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
-export const config = {
-  matcher: ["/settings/:path*"],
+export const config = { 
+  matcher: ["/settings/:path*", "/deals/:path*"] 
 };
