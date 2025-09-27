@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     const oauth2 = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
-    let accessToken = tok.access_token || undefined;
+    const accessToken = tok.access_token || undefined;
     let refreshToken;
     try {
       refreshToken = safeDecrypt(tok.refresh_token);
