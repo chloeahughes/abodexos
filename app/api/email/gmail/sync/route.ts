@@ -5,16 +5,24 @@ import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-const key = Buffer.from(process.env.ENCRYPTION_KEY || "", "base64");
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 function safeDecrypt(b64?: string | null) {
-  if (!b64) return undefined;
-  const buf = Buffer.from(b64, "base64");
-  const iv = buf.subarray(0, 12);
-  const tag = buf.subarray(12, 28);
-  const data = buf.subarray(28);
-  const d = crypto.createDecipheriv("aes-256-gcm", key);
-  d.setAuthTag(tag);
-  return Buffer.concat([d.update(data), d.final()]).toString("utf8");
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key || !b64) return undefined;
+  try {
+    const keyBuf = Buffer.from(key, "base64");
+    const buf = Buffer.from(b64, "base64");
+    const iv = buf.subarray(0, 12);
+    const tag = buf.subarray(12, 28);
+    const data = buf.subarray(28);
+    const d = crypto.createDecipheriv("aes-256-gcm", keyBuf, iv);
+    d.setAuthTag(tag);
+    return Buffer.concat([d.update(data), d.final()]).toString("utf8");
+  } catch {
+    return undefined;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -24,11 +32,13 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supaSSR.auth.getUser();
     if (!user) return NextResponse.json({ ok:false, where:"auth", error:"not_authenticated" }, { status:401 });
 
-    // 2) Admin client (service role)
-    const admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    // 2) Admin client (service role) - guard envs
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !service) {
+      return NextResponse.json({ ok: false, error: "server_misconfigured" }, { status: 500 });
+    }
+    const admin = createClient(url, service);
 
     // 3) Load tokens
     const { data: tok, error: tokErr } = await admin
@@ -40,12 +50,12 @@ export async function POST(req: NextRequest) {
     if (tokErr) throw new Error(`db_tokens: ${tokErr.message}`);
     if (!tok)  return NextResponse.json({ ok:false, where:"tokens", error:"no_tokens" }, { status:400 });
 
-    // 4) Google client
-    const CLIENT_ID = process.env.GOOGLE_CLIENT_ID!;
-    const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!;
-    const REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI!;
+    // 4) Google client - guard envs
+    const CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
+    const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+    const REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI;
     if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
-      throw new Error("missing_google_envs");
+      return NextResponse.json({ ok: false, error: "server_misconfigured" }, { status: 500 });
     }
 
     const oauth2 = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
