@@ -1,312 +1,290 @@
 "use client";
-import { useState } from "react";
-import { getDealById, getActivitiesForDeal, getRelativeTime } from "@/lib/data.mock";
-import { Deal } from "@/lib/types";
 
-const formatCurrency = (amount: number) => {
+import { useEffect, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Mail, FileText, Info } from 'lucide-react';
+import { Deal, DealEmail } from '@/lib/types';
+import { formatDateTime } from '@/lib/format';
+
+// Helper to format currency
+const formatCurrency = (value?: number) => {
+  if (!value) return '—';
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount);
+  }).format(value);
 };
 
-const getStageColor = (stage: Deal["stage"]) => {
+// Helper to get stage badge color
+const getStageColor = (stage: Deal['stage']) => {
   switch (stage) {
-    case "Sourcing": return "bg-blue-100 text-blue-800";
-    case "Due Diligence": return "bg-yellow-100 text-yellow-800";
-    case "Negotiating": return "bg-orange-100 text-orange-800";
-    case "Closed": return "bg-green-100 text-green-800";
-    default: return "bg-gray-100 text-gray-800";
+    case 'Sourcing':
+      return 'bg-blue-100 text-blue-800';
+    case 'Due Diligence':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'Negotiating':
+      return 'bg-orange-100 text-orange-800';
+    case 'Closed':
+      return 'bg-green-100 text-green-800';
+    default:
+      return 'bg-gray-100 text-gray-800';
   }
 };
 
-const StakeholderChips = ({ stakeholders }: { stakeholders: string[] }) => (
-  <div className="flex gap-1">
-    {stakeholders.map((initials, index) => (
-      <span
-        key={index}
-        className="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-700 bg-gray-200 rounded-full"
-      >
-        {initials}
-      </span>
-    ))}
-  </div>
-);
+const getDaysActive = (createdAt: string) => {
+  const created = new Date(createdAt);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - created.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};
 
-export default function DealDetailPage({ params }: { params: { id: string } }) {
-  const [activeTab, setActiveTab] = useState("overview");
-  const deal = getDealById(params.id);
-  const activities = getActivitiesForDeal(params.id);
+export default function DealDetailPage() {
+  const params = useParams();
+  const dealId = params.id as string;
+  const [deal, setDeal] = useState<Deal | null>(null);
+  const [dealEmails, setDealEmails] = useState<DealEmail[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  if (!deal) {
+  useEffect(() => {
+    const fetchDealData = async () => {
+      try {
+        // Fetch deal details
+        const dealResponse = await fetch(`/api/deals/${dealId}`, { cache: 'no-store' });
+        if (dealResponse.ok) {
+          const dealData = await dealResponse.json();
+          setDeal(dealData.deal);
+        }
+
+        // Fetch deal emails
+        const emailsResponse = await fetch(`/api/deals/${dealId}/emails`, { cache: 'no-store' });
+        if (emailsResponse.ok) {
+          const emailsData = await emailsResponse.json();
+          setDealEmails(emailsData.emails || []);
+        }
+      } catch (error) {
+        console.error('Error fetching deal data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDealData();
+  }, [dealId]);
+
+  if (loading) {
     return (
-      <div className="p-6">
-        <div className="text-center py-12">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Deal Not Found</h1>
-          <p className="text-gray-600">The deal you're looking for doesn't exist.</p>
-        </div>
+      <div className="p-6 text-center">
+        <div className="text-gray-500">Loading deal...</div>
       </div>
     );
   }
 
-  const tabs = [
-    { id: "overview", label: "Overview" },
-    { id: "documents", label: "Documents" },
-    { id: "messages", label: "Messages" },
-    { id: "details", label: "Deal Details" },
-  ];
+  if (!deal) {
+    return (
+      <div className="p-6 text-center text-lg text-gray-600">
+        Deal not found.
+      </div>
+    );
+  }
+
+  const daysActive = getDaysActive(deal.created_at);
 
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{deal.name}</h1>
-            <p className="text-gray-600 mt-1">{deal.address}</p>
-          </div>
-          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStageColor(deal.stage)}`}>
+      <header className="mb-8 text-center">
+        <div className="flex items-center justify-center gap-4 mb-2">
+          <h1 className="text-3xl font-bold text-gray-900">{deal.name}</h1>
+          <Badge className={`px-3 py-1 text-sm ${getStageColor(deal.stage)}`}>
             {deal.stage}
-          </span>
+          </Badge>
         </div>
+        <p className="text-lg text-gray-600 mb-4">{deal.location}</p>
 
-        {/* Summary Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-500">Total Budget</div>
-            <div className="text-xl font-semibold text-gray-900">{formatCurrency(deal.totalBudget)}</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center max-w-4xl mx-auto">
+          <div className="bg-white rounded-lg p-3 border">
+            <p className="text-xs text-gray-500">Asking Price</p>
+            <p className="text-lg font-semibold text-gray-900">
+              {formatCurrency(deal.asking_price)}
+            </p>
           </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-500">Spent</div>
-            <div className="text-xl font-semibold text-gray-900">{formatCurrency(deal.spent)}</div>
+          <div className="bg-white rounded-lg p-3 border">
+            <p className="text-xs text-gray-500">Purchase Price</p>
+            <p className="text-lg font-semibold text-gray-900">
+              {formatCurrency(deal.purchase_price)}
+            </p>
           </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-500">Days Active</div>
-            <div className="text-xl font-semibold text-gray-900">{deal.daysActive}</div>
+          <div className="bg-white rounded-lg p-3 border">
+            <p className="text-xs text-gray-500">Days Active</p>
+            <p className="text-lg font-semibold text-gray-900">{daysActive}</p>
           </div>
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
-            <div className="text-sm text-gray-500">Team</div>
-            <div className="mt-1">
-              <StakeholderChips stakeholders={deal.stakeholders} />
-            </div>
+          <div className="bg-white rounded-lg p-3 border">
+            <p className="text-xs text-gray-500">Annual NOI</p>
+            <p className="text-lg font-semibold text-gray-900">
+              {formatCurrency(deal.annual_noi)}
+            </p>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Tabs */}
-      <div className="mb-6">
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                  activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </div>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="communication">Communication</TabsTrigger>
+        </TabsList>
 
-      {/* Tab Content */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        {activeTab === "overview" && (
-          <div className="space-y-6">
-            {/* Deal Overview Table */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Deal Overview</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Property Type</span>
-                    <span className="font-medium">Commercial Office</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Asking Price</span>
-                    <span className="font-medium">{formatCurrency(deal.totalBudget)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Purchase Price</span>
-                    <span className="font-medium">{formatCurrency(deal.totalBudget * 0.95)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Price per sqft</span>
-                    <span className="font-medium">${deal.kpis.pricePerSqft}</span>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Team Members</span>
-                    <StakeholderChips stakeholders={deal.stakeholders} />
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Days in Progress</span>
-                    <span className="font-medium">{deal.daysActive}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Square Feet</span>
-                    <span className="font-medium">25,000</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Brokerage</span>
-                    <span className="font-medium">Abodex Realty</span>
-                  </div>
-                </div>
+        <TabsContent value="overview" className="mt-6">
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Deal Overview</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-base">
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Property Type:</span>
+                <span className="font-medium text-gray-900">Commercial</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Asking Price:</span>
+                <span className="font-medium text-gray-900">{formatCurrency(deal.asking_price)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Purchase Price:</span>
+                <span className="font-medium text-gray-900">{formatCurrency(deal.purchase_price)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Price per Sqft:</span>
+                <span className="font-medium text-gray-900">
+                  {deal.price_per_sqft ? `$${deal.price_per_sqft}` : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Team Members:</span>
+                <span className="font-medium text-gray-900 flex space-x-1">
+                  {deal.stakeholders.map((initials) => (
+                    <span
+                      key={initials}
+                      className="flex items-center justify-center w-7 h-7 rounded-full bg-gray-200 text-xs font-medium text-gray-700"
+                    >
+                      {initials}
+                    </span>
+                  ))}
+                </span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Days in Progress:</span>
+                <span className="font-medium text-gray-900">{daysActive}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Square Feet:</span>
+                <span className="font-medium text-gray-900">
+                  {deal.square_feet ? `${deal.square_feet.toLocaleString()} sqft` : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-gray-600">Brokerage:</span>
+                <span className="font-medium text-gray-900">CRE Solutions</span>
               </div>
             </div>
+          </div>
+        </TabsContent>
 
-            {/* Recent Activity */}
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-              <div className="space-y-4">
-                {activities.map((activity, index) => (
-                  <div key={activity.id} className="flex items-start gap-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                    <div className="flex-1">
-                      <div className="text-gray-900">{activity.text}</div>
-                      <div className="text-sm text-gray-500">
-                        {getRelativeTime(activity.timestamp)}
-                        {activity.source && ` • ${activity.source}`}
+        <TabsContent value="files" className="mt-6">
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Files</h2>
+            <ul className="space-y-4">
+              {dealEmails.length > 0 ? (
+                dealEmails.map((email) => (
+                  <li key={email.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center">
+                      <FileText className="w-5 h-5 mr-3 text-gray-500" />
+                      <div>
+                        <span className="text-base font-medium text-gray-900">{email.subject}</span>
+                        <p className="text-sm text-gray-500">From: {email.sender}</p>
                       </div>
                     </div>
+                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                      See Key Info
+                    </button>
+                  </li>
+                ))
+              ) : (
+                <li className="text-center py-8 text-gray-500">
+                  No files found. Connect Gmail to see documents from your emails.
+                </li>
+              )}
+            </ul>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="activity" className="mt-6">
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Activity</h2>
+            <div className="relative pl-4">
+              <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+              {dealEmails.length > 0 ? (
+                dealEmails.map((email, index) => (
+                  <div key={email.id} className="relative mb-6">
+                    <div className="absolute -left-2.5 top-1 w-5 h-5 rounded-full bg-blue-500 border-2 border-white"></div>
+                    <p className="text-base text-gray-800 mb-1">
+                      Email received: {email.subject}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      From: {email.sender} • {formatDateTime(email.sent_at)}
+                    </p>
+                    {email.snippet && (
+                      <p className="text-sm text-gray-600 mt-1 italic">
+                        "{email.snippet.substring(0, 100)}..."
+                      </p>
+                    )}
                   </div>
-                ))}
-              </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  No activity yet. Connect Gmail to see email activity.
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </TabsContent>
 
-        {activeTab === "documents" && (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Documents</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <span className="text-blue-600">📄</span>
-                  </div>
-                  <div>
-                    <div className="font-medium">Financial Model.xlsx</div>
-                    <div className="text-sm text-gray-500">Uploaded 2 days ago</div>
-                  </div>
-                </div>
-                <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                  See Key Info
-                </button>
-              </div>
-              <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <span className="text-green-600">📊</span>
-                  </div>
-                  <div>
-                    <div className="font-medium">Property Inspection Report.pdf</div>
-                    <div className="text-sm text-gray-500">Uploaded 1 week ago</div>
-                  </div>
-                </div>
-                <button className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                  See Key Info
-                </button>
-              </div>
-            </div>
+        <TabsContent value="communication" className="mt-6">
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-4">Communication</h2>
+            <ul className="space-y-3">
+              {dealEmails.length > 0 ? (
+                dealEmails.map((email) => (
+                  <li key={email.id} className="flex items-center p-3 border rounded-lg bg-red-50 text-red-800">
+                    <Mail className="w-5 h-5 mr-3" />
+                    <div className="flex-1">
+                      <div className="font-medium">{email.subject}</div>
+                      <div className="text-sm">
+                        From: {email.sender} • {formatDateTime(email.sent_at)}
+                      </div>
+                    </div>
+                    <a
+                      href={`https://mail.google.com/mail/u/0/#inbox/${email.gmail_thread_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm underline hover:no-underline"
+                    >
+                      View in Gmail
+                    </a>
+                  </li>
+                ))
+              ) : (
+                <li className="text-center py-8 text-gray-500">
+                  No emails found. Connect Gmail to see communication history.
+                </li>
+              )}
+            </ul>
           </div>
-        )}
-
-        {activeTab === "messages" && (
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Messages</h3>
-            <div className="space-y-3">
-              {activities.filter(a => a.type === "email").map((activity) => (
-                <div key={activity.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">✉️</span>
-                  <div className="flex-1">
-                    <div className="text-gray-900">{activity.text}</div>
-                    <div className="text-sm text-gray-500">{getRelativeTime(activity.timestamp)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "details" && (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Basics</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Property Type</span>
-                    <span className="font-medium">Commercial Office</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Address</span>
-                    <span className="font-medium">{deal.address}</span>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Square Feet</span>
-                    <span className="font-medium">25,000</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Year Built</span>
-                    <span className="font-medium">2018</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Financials</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Purchase Price</span>
-                    <span className="font-medium">{formatCurrency(deal.totalBudget * 0.95)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Price per sqft</span>
-                    <span className="font-medium">${deal.kpis.pricePerSqft}</span>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Annual NOI</span>
-                    <span className="font-medium">{formatCurrency(deal.kpis.annualNOI)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Occupancy Rate</span>
-                    <span className="font-medium">{deal.kpis.occupancyPct}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Contacts</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Broker</span>
-                  <span className="font-medium">John Smith - Abodex Realty</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Property Manager</span>
-                  <span className="font-medium">Sarah Johnson - Property Co.</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

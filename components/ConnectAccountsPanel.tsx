@@ -1,54 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, FileSpreadsheet } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
-
-type EmailRow = {
-  id: string;
-  subject: string | null;
-  from_name: string | null;
-  from_email: string | null;
-  received_at: string | null;
-  snippet?: string | null;
-};
-
-type GmailSummary = {
-  connected: boolean;
-  lastUpdated: string | null;
-  emails: EmailRow[];
-};
+import { useIntegrations } from "@/lib/hooks/useIntegrations";
 
 export default function ConnectAccountsPanel() {
-  const [gmail, setGmail] = useState<GmailSummary>({
-    connected: false,
-    lastUpdated: null,
-    emails: [],
-  });
-
-  // TODO: Replace with your real start route
-  const gmailConnectHref =
-    process.env.NEXT_PUBLIC_GMAIL_CONNECT_HREF || "/api/auth/google/start";
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/integrations/gmail/summary", { cache: "no-store" });
-        if (!res.ok) throw new Error("Failed to load gmail summary");
-        const data = (await res.json()) as GmailSummary;
-        if (mounted) setGmail(data);
-      } catch (e) {
-        console.error(e);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const integrations = useIntegrations();
 
   return (
     <Card id="connect" className="h-full">
@@ -60,37 +20,37 @@ export default function ConnectAccountsPanel() {
         <div className="rounded-lg border p-4">
           <div className="mb-2 flex items-center gap-2">
             <Mail className="h-4 w-4" />
-            <div className="font-medium">Email (Gmail)</div>
+            <div className="font-medium">Connect Gmail</div>
           </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Sync your Gmail with Abodex and automate your deals from mail — without doing any manual work
+          </p>
 
-          {gmail.connected ? (
+          {integrations.gmail.connected ? (
             <div className="text-sm">
               <div className="mb-2 text-green-700">
-                Connected — Last updated {formatDateTime(gmail.lastUpdated)}
+                Connected — Last updated {formatDateTime(integrations.gmail.lastUpdated)}
               </div>
               <ul className="space-y-2">
-                {gmail.emails.map((m) => (
-                  <li key={m.id} className="rounded bg-red-50 p-2">
-                    <div className="font-medium">{m.subject || "(no subject)"}</div>
+                {integrations.gmail.recentEmails?.map((email) => (
+                  <li key={email.id} className="rounded bg-red-50 p-2">
+                    <div className="font-medium">{email.subject}</div>
                     <div className="text-xs text-gray-600">
-                      From: {m.from_name || m.from_email || "Unknown"} • {formatDateTime(m.received_at)}
+                      From: {email.from} • {formatDateTime(email.date)}
                     </div>
                   </li>
                 ))}
-                {gmail.emails.length === 0 && (
+                {(!integrations.gmail.recentEmails || integrations.gmail.recentEmails.length === 0) && (
                   <li className="rounded bg-red-50 p-2 text-xs text-gray-600">No recent emails</li>
                 )}
               </ul>
             </div>
           ) : (
-            <>
-              <p className="mb-3 text-sm text-muted-foreground">
-                Sync your Gmail to keep deals current. Just 2 clicks.
-              </p>
-              <Button asChild>
-                <Link href={gmailConnectHref}>Connect Gmail ✉️</Link>
-              </Button>
-            </>
+            <Button asChild>
+              <Link href={integrations.gmail.connectHref || "/api/auth/google/start"}>
+                Connect Gmail ✉️
+              </Link>
+            </Button>
           )}
         </div>
 
@@ -98,12 +58,31 @@ export default function ConnectAccountsPanel() {
         <div className="rounded-lg border p-4">
           <div className="mb-2 flex items-center gap-2">
             <FileSpreadsheet className="h-4 w-4" />
-            <div className="font-medium">Excel</div>
+            <div className="font-medium">Connect Excel</div>
           </div>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Connect Excel to auto-fill Deal Details. Just 2 clicks.
+          <p className="text-sm text-gray-600 mb-4">
+            Sync your Excel with Abodex and automate your deals from sheets — saving hours of manual work
           </p>
-          <Button onClick={() => alert("TODO: Wire Excel connection")}>Connect Excel 📊</Button>
+
+          {integrations.excel.connected ? (
+            <div className="text-sm">
+              <div className="mb-2 text-green-700">
+                Connected — Last updated {formatDateTime(integrations.excel.lastUpdated)}
+              </div>
+              <ul className="space-y-2">
+                <li className="rounded bg-green-50 p-2 text-green-800">
+                  📊 Pulled: Rent Roll.xlsx
+                </li>
+                <li className="rounded bg-green-50 p-2 text-green-800">
+                  📊 Pulled: Deal Metrics.xlsx
+                </li>
+              </ul>
+            </div>
+          ) : (
+            <Button onClick={() => alert("TODO: Wire Excel connection")}>
+              Connect Excel 📊
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
