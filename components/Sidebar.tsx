@@ -12,8 +12,8 @@ type NavItem = {
 };
 
 const navigation: NavItem[] = [
-  { name: "Active Deals", href: "/", icon: Home },
-  { name: "Connect Accounts", href: "/#connect", icon: Mail },
+  { name: "Active Deals", href: "/deals", icon: Home },
+  { name: "Connect Accounts", href: "/connect-accounts", icon: Mail },
   { name: "Reports", href: "/reports", icon: BarChart3 },
   { name: "Settings", href: "/settings", icon: Settings },
   { name: "User Profile", href: "/profile", icon: User },
@@ -27,10 +27,7 @@ export default function Sidebar() {
       <nav className="space-y-2">
         {navigation.map((item) => {
           const Icon = item.icon;
-          const selected =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
+            const selected = pathname.startsWith(item.href);
 
           return (
             <Link

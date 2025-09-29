@@ -5,19 +5,20 @@ import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
   const supabase = createMiddlewareClient({ req, res });
-  // Refresh session cookie if there is one
-  await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
 
-  const url = new URL(req.url);
-  const isAuthCallback = url.pathname === "/auth/callback";
-  const isStatic =
-    url.pathname.startsWith("/_next") ||
-    url.pathname.startsWith("/favicon.ico") ||
-    url.pathname.startsWith("/robots.txt") ||
-    url.pathname.startsWith("/sitemap.xml");
-
-  if (isAuthCallback || isStatic) return res;
+  if (req.nextUrl.pathname.startsWith("/deals") && !session) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/auth/signin";
+    url.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
+    return NextResponse.redirect(url);
+  }
   return res;
 }
 
-export const config = { matcher: ["/settings/:path*", "/deals/:path*"] };
+export const config = {
+  matcher: [
+    "/deals/:path*",
+    "/settings/:path*",
+  ],
+};
