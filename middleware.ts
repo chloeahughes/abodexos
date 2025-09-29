@@ -7,7 +7,7 @@ export async function middleware(req: NextRequest) {
   const supabase = createMiddlewareClient({ req, res });
   const { data: { session } } = await supabase.auth.getSession();
 
-  if (req.nextUrl.pathname.startsWith("/deals") && !session) {
+  if (req.nextUrl.pathname.startsWith("/settings") && !session) {
     const url = req.nextUrl.clone();
     url.pathname = "/auth/signin";
     url.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
@@ -18,7 +18,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/deals/:path*",
     "/settings/:path*",
   ],
 };

@@ -1,12 +1,14 @@
-"use client";
-
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { cookies } from "next/headers";
+import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
+import { notFound } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Mail, FileText, Info } from 'lucide-react';
+import { Mail, FileText } from 'lucide-react';
 import { Deal, DealEmail } from '@/lib/types';
 import { formatDateTime } from '@/lib/format';
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // Helper to format currency
 const formatCurrency = (value?: number) => {
@@ -42,53 +44,40 @@ const getDaysActive = (createdAt: string) => {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 };
 
-export default function DealDetailPage() {
-  const params = useParams();
-  const dealId = params.id as string;
-  const [deal, setDeal] = useState<Deal | null>(null);
-  const [dealEmails, setDealEmails] = useState<DealEmail[]>([]);
-  const [loading, setLoading] = useState(true);
+export default async function DealDetailPage({ params }: { params: { id: string } }) {
+  const supabase = createServerComponentClient({ cookies });
 
-  useEffect(() => {
-    const fetchDealData = async () => {
-      try {
-        // Fetch deal details
-        const dealResponse = await fetch(`/api/deals/${dealId}`, { cache: 'no-store' });
-        if (dealResponse.ok) {
-          const dealData = await dealResponse.json();
-          setDeal(dealData.deal);
-        }
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-        // Fetch deal emails
-        const emailsResponse = await fetch(`/api/deals/${dealId}/emails`, { cache: 'no-store' });
-        if (emailsResponse.ok) {
-          const emailsData = await emailsResponse.json();
-          setDealEmails(emailsData.emails || []);
-        }
-      } catch (error) {
-        console.error('Error fetching deal data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDealData();
-  }, [dealId]);
-
-  if (loading) {
-    return (
-      <div className="p-6 text-center">
-        <div className="text-gray-500">Loading deal...</div>
-      </div>
-    );
+  if (userError || !user) {
+    notFound();
   }
 
-  if (!deal) {
-    return (
-      <div className="p-6 text-center text-lg text-gray-600">
-        Deal not found.
-      </div>
-    );
+  const { data: deal, error: dealError } = await supabase
+    .from("deals")
+    .select("*")
+    .eq("id", params.id)
+    .eq("user_id", user.id)
+    .single();
+
+  if (dealError || !deal) {
+    console.error("Error fetching deal:", dealError);
+    notFound();
+  }
+
+  const { data: dealEmails, error: emailsError } = await supabase
+    .from("deal_emails")
+    .select("*")
+    .eq("deal_id", params.id)
+    .eq("user_id", user.id)
+    .order("sent_at", { ascending: false });
+
+  if (emailsError) {
+    console.error("Error fetching deal emails:", emailsError);
+    // Continue without emails if there's an error
   }
 
   const daysActive = getDaysActive(deal.created_at);
@@ -197,7 +186,7 @@ export default function DealDetailPage() {
           <div className="bg-white rounded-xl shadow-sm border p-6">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Files</h2>
             <ul className="space-y-4">
-              {dealEmails.length > 0 ? (
+              {dealEmails && dealEmails.length > 0 ? (
                 dealEmails.map((email) => (
                   <li key={email.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div className="flex items-center">
@@ -226,7 +215,7 @@ export default function DealDetailPage() {
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Activity</h2>
             <div className="relative pl-4">
               <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-gray-200"></div>
-              {dealEmails.length > 0 ? (
+              {dealEmails && dealEmails.length > 0 ? (
                 dealEmails.map((email, index) => (
                   <div key={email.id} className="relative mb-6">
                     <div className="absolute -left-2.5 top-1 w-5 h-5 rounded-full bg-blue-500 border-2 border-white"></div>
@@ -256,7 +245,7 @@ export default function DealDetailPage() {
           <div className="bg-white rounded-xl shadow-sm border p-6">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">Communication</h2>
             <ul className="space-y-3">
-              {dealEmails.length > 0 ? (
+              {dealEmails && dealEmails.length > 0 ? (
                 dealEmails.map((email) => (
                   <li key={email.id} className="flex items-center p-3 border rounded-lg bg-red-50 text-red-800">
                     <Mail className="w-5 h-5 mr-3" />

@@ -63,3 +63,14 @@ export type Activity = {
   timestamp: string;
   source?: string;
 };
+
+export type IngestRequest = {
+  keywords: string[];
+  dealName?: string;
+};
+
+export type IngestResponse = {
+  dealId: string;
+  dealName: string;
+  matchedCount: number;
+};
